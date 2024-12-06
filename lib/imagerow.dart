@@ -11,10 +11,10 @@ class ImageRow extends StatefulWidget {
   const ImageRow({super.key, required this.emotes});
 
   @override
-  _ImageRowState createState() => _ImageRowState();
+  ImageRowState createState() => ImageRowState();
 }
 
-class _ImageRowState extends State<ImageRow> {
+class ImageRowState extends State<ImageRow> {
   late Future<List<Uint8List>> _imagesFuture;
 
   @override

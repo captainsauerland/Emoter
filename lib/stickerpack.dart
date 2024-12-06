@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:emotes_to_stickers/emote.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 class Stickerpack {
@@ -33,7 +34,7 @@ class Stickerpack {
     // Write the JSON string to the file
     await file.writeAsString(jsonString);
 
-    print('Object saved to $path/$name.json');
+    if (kDebugMode) print('Object saved to $path/$name.json');
   }
 
   static Stickerpack getStickerpackFromJson(String content) {

@@ -11,7 +11,7 @@ import 'package:emotes_to_stickers/api_requester.dart';
 class SearchPage extends StatefulWidget {
   final VoidCallback triggerStickerpageUpdate;
 
-  const SearchPage({Key? key, required this.triggerStickerpageUpdate}) : super(key: key);
+  const SearchPage({super.key, required this.triggerStickerpageUpdate});
 
   @override
   SearchPageState createState() => SearchPageState();
@@ -19,7 +19,7 @@ class SearchPage extends StatefulWidget {
 
 class SearchPageState extends State<SearchPage> {
   List<Emote> _emotes = [];
-  List<GlobalKey<_ClickableEmoteTileState>> emoteKeys = []; //kommunikation mit den tiles
+  List<GlobalKey<ClickableEmoteTileState>> emoteKeys = []; //kommunikation mit den tiles
   ValueNotifier<int> numberOfEmotesSelected = ValueNotifier(0);
   String currentPackName = "";
   bool showBackground = true;
@@ -34,7 +34,7 @@ class SearchPageState extends State<SearchPage> {
   //if a tile gets clicked, it calls this method
   void changedClickStatus(bool newStatus, int index) {
     int numberOfEmotesSelectedTemp = 0;
-    for (GlobalKey<_ClickableEmoteTileState> emoteKey in emoteKeys) {
+    for (GlobalKey<ClickableEmoteTileState> emoteKey in emoteKeys) {
       if (emoteKey.currentState != null && emoteKey.currentState!._isClicked) {
         numberOfEmotesSelectedTemp++;
       }
@@ -65,7 +65,7 @@ class SearchPageState extends State<SearchPage> {
 
       setState(() {
         emoteKeys = List.generate(emotes.length,
-                (_) => GlobalKey<_ClickableEmoteTileState>()); //neue keys
+                (_) => GlobalKey<ClickableEmoteTileState>()); //neue keys
         _emotes = emotes;
         if (_emotes.isEmpty){
           _emotes.add(Emote(id: "", name: "")); //empty emote to signal, that the search is done
@@ -108,7 +108,7 @@ class SearchPageState extends State<SearchPage> {
 
       setState(() {
         emoteKeys.addAll(List.generate(emotes.length,
-                (_) => GlobalKey<_ClickableEmoteTileState>())); //neue keys
+                (_) => GlobalKey<ClickableEmoteTileState>())); //neue keys
         _emotes.addAll(emotes);
       });
     }catch (e){
@@ -125,7 +125,7 @@ class SearchPageState extends State<SearchPage> {
 
   //hier müssen alle emotes die selected sind
   Future<void> addToPack() async {
-    for (GlobalKey<_ClickableEmoteTileState> emoteKey in emoteKeys) {
+    for (GlobalKey<ClickableEmoteTileState> emoteKey in emoteKeys) {
       if (emoteKey.currentState != null && emoteKey.currentState!._isClicked) {
         await DatabaseHelper().addEmoteToStickerpack(
             StickerpackPageState.currentStickerpack!.name,
@@ -300,10 +300,10 @@ class ClickableEmoteTile extends StatefulWidget {
       required this.changedClickedStatus});
 
   @override
-  _ClickableEmoteTileState createState() => _ClickableEmoteTileState();
+  ClickableEmoteTileState createState() => ClickableEmoteTileState();
 }
 
-class _ClickableEmoteTileState extends State<ClickableEmoteTile>
+class ClickableEmoteTileState extends State<ClickableEmoteTile>
     with AutomaticKeepAliveClientMixin {
   bool _isClicked = false;
 

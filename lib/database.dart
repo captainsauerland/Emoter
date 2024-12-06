@@ -66,7 +66,7 @@ class DatabaseHelper {
         ownerUsername: map['owner_username'],
         hostUrl: map['host_url'],
         stickerpack: map['stickerpack'],
-        time_at_cash: map['time_at_cash']
+        timeAtCash: map['time_at_cash']
         //image: map['image']
         );
   }

@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:emotes_to_stickers/util.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:emotes_to_stickers/stickerpack.dart';
 
@@ -8,10 +7,10 @@ import 'emote.dart';
 
 class StickerPackViewerLight extends StatefulWidget {
   final Stickerpack stickerpack; //emotes will be outdated
-  StickerPackViewerLight({
-    Key? key,
+  const StickerPackViewerLight({
+    super.key,
     required this.stickerpack,
-  }) : super(key: key);
+  });
 
   @override
   StickerPackViewerLightState createState() => StickerPackViewerLightState();
@@ -19,10 +18,9 @@ class StickerPackViewerLight extends StatefulWidget {
 
 class StickerPackViewerLightState extends State<StickerPackViewerLight> {
   List<Emote> _emotes = [];
-  List<GlobalKey<_ClickableEmoteTileState>> emoteKeys = [];
+  List<GlobalKey<ClickableEmoteTileState>> emoteKeys = [];
   ListNotifier emoteSelectionNotifier = ListNotifier();
   int trayIcon = 0;
-  final bool DEBUG = true;
 
   @override
   void initState() {
@@ -31,7 +29,7 @@ class StickerPackViewerLightState extends State<StickerPackViewerLight> {
     trayIcon = widget.stickerpack.trayIcon;
 
     emoteKeys = List.generate(
-        _emotes.length, (_) => GlobalKey<_ClickableEmoteTileState>());
+        _emotes.length, (_) => GlobalKey<ClickableEmoteTileState>());
     emoteSelectionNotifier.setList(List.filled(_emotes.length, false));
   }
 
@@ -183,9 +181,9 @@ class ClickableEmoteTile extends StatefulWidget {
   final String name;
   final String username;
   final int initialTrayIcon;
-  ListNotifier emoteSelectionNotifier;
+  final ListNotifier emoteSelectionNotifier;
 
-  ClickableEmoteTile(
+  const ClickableEmoteTile(
       {super.key,
       required this.index,
       required this.image,
@@ -196,10 +194,10 @@ class ClickableEmoteTile extends StatefulWidget {
       required this.emoteSelectionNotifier});
 
   @override
-  _ClickableEmoteTileState createState() => _ClickableEmoteTileState();
+  ClickableEmoteTileState createState() => ClickableEmoteTileState();
 }
 
-class _ClickableEmoteTileState extends State<ClickableEmoteTile>
+class ClickableEmoteTileState extends State<ClickableEmoteTile>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
@@ -208,6 +206,7 @@ class _ClickableEmoteTileState extends State<ClickableEmoteTile>
 
   @override
   void initState() {
+    super.initState();
     trayIcon = widget.initialTrayIcon;
   }
 
@@ -219,6 +218,7 @@ class _ClickableEmoteTileState extends State<ClickableEmoteTile>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     ColorScheme colorScheme = Theme.of(context).colorScheme;
 
     return ListenableBuilder(

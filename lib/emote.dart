@@ -8,10 +8,10 @@ class Emote {
   String? ownerUsername;
   String? hostUrl;
   String? stickerpack; //useless
-  int? time_at_cash;
+  int? timeAtCash;
   Uint8List? image; //always 512x512 webp
 
-  Emote({ required this.id, this.name, this.ownerUsername, this.hostUrl, this.stickerpack, this.time_at_cash, this.image});
+  Emote({ required this.id, this.name, this.ownerUsername, this.hostUrl, this.stickerpack, this.timeAtCash, this.image});
 
   @override
   String toString() {
@@ -25,7 +25,7 @@ class Emote {
       'owner_username': ownerUsername,
       'host_url': hostUrl,
       'stickerpack' : stickerpack,
-      'time_at_cash' : time_at_cash,
+      'time_at_cash' : timeAtCash,
       //'image' : image
     };
   }
@@ -37,7 +37,7 @@ class Emote {
         ownerUsername: map['owner_username'],
         hostUrl: map['host_url'],
         stickerpack: map['stickerpack'],
-        time_at_cash: map['time_at_cash']
+        timeAtCash: map['time_at_cash']
     );
   }
 

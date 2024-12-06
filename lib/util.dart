@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:emotes_to_stickers/emote.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_to_clipboard/image_to_clipboard.dart';
-import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
@@ -115,12 +115,12 @@ Future<void> cleanCache({bool cleanAll = false}) async{
 
         //if (now.difference(creationTime).inHours > 1) {
           await file.delete();
-          print('Deleted: ${file.path}');
+          if (kDebugMode) print('Deleted: ${file.path}');
         //}
       }
     }
   } else {
-    print('Directory does not exist');
+    if (kDebugMode) print('Directory does not exist');
   }
 }
 
@@ -155,6 +155,8 @@ void addEmoteImageToClipboard(Emote emote) async {
 }
 
 class MyAppBarTitle extends StatelessWidget{
+  const MyAppBarTitle({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Row(children: [

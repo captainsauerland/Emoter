@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class CustomDialog extends StatelessWidget {
   final String message;
 
-  const CustomDialog({this.message = "This is a customizable message"});
+  const CustomDialog({super.key, this.message = "This is a customizable message"});
 
   @override
   Widget build(BuildContext context) {

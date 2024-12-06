@@ -56,9 +56,9 @@ class SevenTv {
       "all": 'query SearchEmotes(\$query: String!, \$page: Int, \$sort: Sort, \$limit: Int, \$filter: EmoteSearchFilter) {\n emotes(query: \$query, page: \$page, sort: \$sort, limit: \$limit, filter: \$filter) {\nitems{\n id\n name\n owner{\n username\n }\n host{\n url}}\n}\n}',
       "url": 'query SearchEmotes(\$query: String!, \$page: Int, \$sort: Sort, \$limit: Int, \$filter: EmoteSearchFilter) {\n emotes(query: \$query, page: \$page, sort: \$sort, limit: \$limit, filter: \$filter) {\nitems{host{\n url}}\n}\n}'
     };
-    var headers = {
-      "Content-Type": "application/json"
-    };
+    // var headers = {
+    //   "Content-Type": "application/json"
+    // };
     var payload = {
       "operationName": "SearchEmotes",
       "variables": {

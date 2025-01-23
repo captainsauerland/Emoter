@@ -144,6 +144,13 @@ class SettingsPageState extends State<SettingsPage> {
                   onLongPressed: () => _deleteAllCacheDialogBuilder(context),
                   onPressed: () => onCleanCache(context)),
               CustomButton(
+                  title: "Join the Emoter Discord!",
+                  subtitle: Text("please?"),
+                  icon: Icons.discord,
+                  onPressed: () => launchUrlString(
+                      "https://discord.gg/6Wp347G6Na")
+              ),
+              CustomButton(
                 title: "Credits",
                 subtitle: Text("<3"),
                 icon: Icons.people,

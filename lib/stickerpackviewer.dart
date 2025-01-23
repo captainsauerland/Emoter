@@ -1,9 +1,11 @@
+import 'package:emotes_to_stickers/api_requester.dart';
 import 'package:emotes_to_stickers/database.dart';
 import 'package:emotes_to_stickers/util.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:emotes_to_stickers/stickerpack.dart';
+import 'package:flutter/services.dart';
 
 import 'emote.dart';
 
@@ -28,6 +30,7 @@ class StickerPackViewerState extends State<StickerPackViewer> {
   ListNotifier emoteSelectionNotifier = ListNotifier();
   int trayIcon = 0;
   bool DEBUG = kDebugMode;
+  String? _errorMessage;
 
   void emoteSelectionChanged() {
     //passs
@@ -102,6 +105,76 @@ class StickerPackViewerState extends State<StickerPackViewer> {
     );
   }
 
+  Future<void> searchAndAddEmoteById(String id, BuildContext context) async {
+    Emote? result = await requestById(id);
+    if (result == null) {
+      _errorMessage = 'Invalid input. Please try again.';
+      if (context.mounted) {
+        Navigator.pop(context);
+        _addStickerById(context);
+      }
+      return;
+    }
+
+    await DatabaseHelper().saveOrGetEmote(result);
+    await DatabaseHelper().addEmoteToStickerpack(widget.stickerpack.name, id);
+    widget.triggerStickerpageUpdate();
+
+    List<Emote> emotesNew = await DatabaseHelper()
+        .getAllEmotesOfStickerpack(widget.stickerpack.name);
+
+    emoteSelectionNotifier.setList(List.filled(emotesNew.length, false));
+    emoteKeys.add(GlobalKey<_ClickableEmoteTileState>());
+    setState(() {
+      _emotes = emotesNew;
+    });
+    if (context.mounted){
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text("Successfully added ${result.name}")));
+    }
+  }
+
+  Future<void> _addStickerById(BuildContext context) {
+    TextEditingController textFieldController = TextEditingController();
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Add sticker by id:'),
+          content: TextField(
+            controller: textFieldController,
+            decoration:
+                InputDecoration(hintText: "probably a 26-character string", errorText: _errorMessage),
+          ),
+          actions: <Widget>[
+            TextButton(
+              style: TextButton.styleFrom(
+                textStyle: Theme.of(context).textTheme.labelLarge,
+              ),
+              child: const Text('cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                textStyle: Theme.of(context).textTheme.labelLarge,
+              ),
+              child: const Text('go'),
+              onPressed: () {
+                searchAndAddEmoteById(textFieldController.text, context);
+                //Navigator.of(context).pop();
+              },
+            )
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -134,6 +207,14 @@ class StickerPackViewerState extends State<StickerPackViewer> {
                   tooltip: "featured pack",
                 )
               : Container(),
+          IconButton(
+            onPressed: () => {
+              _errorMessage = null,
+              _addStickerById(context)
+            },
+            icon: Icon(Icons.add_box),
+            tooltip: "add by id",
+          ),
           IconButton(
             onPressed: () => _deletePackDialogBuilder(context),
             icon: Icon(CupertinoIcons.trash_circle),

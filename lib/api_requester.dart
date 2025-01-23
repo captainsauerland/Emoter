@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:emotes_to_stickers/emote.dart';
 import 'package:emotes_to_stickers/database.dart';
 import 'package:emotes_to_stickers/http_singleton.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
 Future<List<Emote>> createEmoteObjects(Map<String, dynamic> response) async {
   if (response.containsKey('errors')) {
@@ -35,6 +36,104 @@ Future<List<Emote>> createEmoteObjects(Map<String, dynamic> response) async {
   return emoteObjects;
 }
 
+//hmm
+Future<Emote?> createOneEmoteObject(Map<String, dynamic> response) async {
+  if (response.containsKey('errors')) {
+    throw Exception(response['errors'][0]['message']);
+  }
+  var emoteData = response['emote'];
+
+    var emoteId = emoteData['id'];
+    var emoteName = emoteData['name'];
+    var owner = emoteData['owner'];
+    var ownerUsername = owner != null ? owner['username'] : null;
+    var host = emoteData['host'];
+    var hostUrl = host['url'];
+
+    Emote temporaryEmote = Emote(
+      id: emoteId,
+      name: emoteName,
+      ownerUsername: ownerUsername,
+      hostUrl: hostUrl,
+    );
+
+    Emote loadedEmote = await DatabaseHelper().saveOrGetEmote(temporaryEmote);
+
+    return loadedEmote;
+}
+
+
+
+//List is empty when nothing was found
+Future<Emote?> requestById(String id) async{
+  final HttpLink httpLink = HttpLink(
+    "https://7tv.io/v3/gql",
+  );
+
+  final GraphQLClient client = GraphQLClient(
+    cache: GraphQLCache(store: InMemoryStore()),
+    link: httpLink,
+  );
+
+  const String query = r'''
+    query GetEmote($id: ObjectID!) {
+      emote(id: $id) {
+        id
+        name
+        flags
+        lifecycle
+        tags
+        animated
+        created_at
+        owner_id
+        owner {
+          id
+          username
+        }
+        host {
+          url
+        }
+        versions {
+          id
+          name
+          description
+          created_at
+          host {
+            url
+          }
+          lifecycle
+          error
+          state
+          listed
+        }
+        state
+        listed
+        personal_use
+      }
+    }
+  ''';
+
+  final QueryOptions options = QueryOptions(
+    document: gql(query),
+    variables: <String, dynamic>{
+      'id': id,
+    },
+  );
+
+  final QueryResult result = await client.query(options);
+
+  if (result.hasException) {
+    print(result.exception.toString());
+  }
+  var data = result.data;
+  if (result.data == null){
+    return null;
+  }
+
+  return await createOneEmoteObject(data!);
+}
+
+//not ideal, doesnt use flutter_graphql
 class SevenTv {
   final String endpoint = "https://7tv.io/v3/gql";
 

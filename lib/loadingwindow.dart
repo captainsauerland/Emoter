@@ -8,23 +8,31 @@ class LoadingDialog extends StatefulWidget {
   LoadingDialogState createState() => LoadingDialogState();
 }
 
-class LoadingDialogState extends State<LoadingDialog>{
+class LoadingDialogState extends State<LoadingDialog> {
   double value = 0;
 
   final GlobalKey<NavigatorState> _dialogKey = GlobalKey<NavigatorState>();
 
-  void setValue(double valueNew){
+  void setValue(double valueNew) {
     setState(() {
       value = valueNew;
     });
   }
 
-  double getValue(){
+  double getValue() {
     return value;
   }
 
-  void closeDialog(){
-    Navigator.of(_dialogKey.currentContext!).pop();
+  void closeDialog() {
+    final dialogContext = _dialogKey.currentContext;
+    if (dialogContext == null) {
+      return;
+    }
+
+    final navigator = Navigator.of(dialogContext);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
   }
 
   @override

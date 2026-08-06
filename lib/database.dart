@@ -1,13 +1,29 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:emotes_to_stickers/emote.dart';
 import 'package:emotes_to_stickers/stickerpack.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
 
   factory DatabaseHelper() => _instance;
+
+  static const String _databaseName = 'emotes_database.db';
+  static const List<String> _sqliteSidecarSuffixes = [
+    '-wal',
+    '-shm',
+    '-journal'
+  ];
+  static const Set<String> _requiredTables = {
+    'stickerpacks',
+    'cashed_emotes',
+    'stickerpack_emotes'
+  };
 
   static Database? _database;
 
@@ -19,8 +35,143 @@ class DatabaseHelper {
     return _database!;
   }
 
+  Future<String> getDatabaseFilePath() async {
+    return join(await getDatabasesPath(), _databaseName);
+  }
+
+  Future<String> _getPreImportBackupPath() async {
+    final documentsDirectory = await getApplicationDocumentsDirectory();
+    return join(
+        documentsDirectory.path, 'emotes_database_pre_import_backup.db');
+  }
+
+  Future<void> _closeDatabaseConnection() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+  }
+
+  Future<void> _reopenDatabaseConnection() async {
+    _database = await _initDatabase();
+  }
+
+  Future<void> _deleteFileIfExists(String filePath) async {
+    final file = File(filePath);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
+  Future<void> _deleteDatabaseWithSidecars(String databasePath) async {
+    await _deleteFileIfExists(databasePath);
+    for (final sidecarSuffix in _sqliteSidecarSuffixes) {
+      await _deleteFileIfExists('$databasePath$sidecarSuffix');
+    }
+  }
+
+  Future<void> _copyDatabaseWithSidecars(
+      String sourceDatabasePath, String destinationDatabasePath) async {
+    final sourceFile = File(sourceDatabasePath);
+
+    if (!await sourceFile.exists()) {
+      throw Exception('Database file not found: $sourceDatabasePath');
+    }
+
+    await Directory(dirname(destinationDatabasePath)).create(recursive: true);
+    await _deleteDatabaseWithSidecars(destinationDatabasePath);
+    await sourceFile.copy(destinationDatabasePath);
+
+    for (final sidecarSuffix in _sqliteSidecarSuffixes) {
+      final sourceSidecar = File('$sourceDatabasePath$sidecarSuffix');
+      if (await sourceSidecar.exists()) {
+        await sourceSidecar.copy('$destinationDatabasePath$sidecarSuffix');
+      }
+    }
+  }
+
+  Future<void> _validateDatabaseSchema(String databasePath) async {
+    final validationDb = await openDatabase(databasePath, readOnly: true);
+    try {
+      final tables = await validationDb
+          .rawQuery("SELECT name FROM sqlite_master WHERE type='table';");
+      final tableNames =
+          tables.map((row) => row['name']?.toString() ?? '').toSet();
+
+      for (final table in _requiredTables) {
+        if (!tableNames.contains(table)) {
+          throw Exception(
+              'Imported database is missing required table "$table".');
+        }
+      }
+    } finally {
+      await validationDb.close();
+    }
+  }
+
+  Future<Uint8List> exportDatabaseBytes() async {
+    await database;
+    final databasePath = await getDatabaseFilePath();
+
+    await _closeDatabaseConnection();
+    try {
+      final sourceDatabase = File(databasePath);
+      if (!await sourceDatabase.exists()) {
+        throw Exception('Local database file could not be found.');
+      }
+
+      return await sourceDatabase.readAsBytes();
+    } finally {
+      await _reopenDatabaseConnection();
+    }
+  }
+
+  Future<void> importDatabaseFromFile(String selectedDatabasePath) async {
+    final selectedDatabase = File(selectedDatabasePath);
+    if (!await selectedDatabase.exists()) {
+      throw Exception('Selected file could not be found.');
+    }
+
+    await database;
+
+    final databasePath = await getDatabaseFilePath();
+    final backupPath = await _getPreImportBackupPath();
+
+    if (selectedDatabase.absolute.path == File(databasePath).absolute.path) {
+      throw Exception('Selected file is already the active database file.');
+    }
+
+    await _closeDatabaseConnection();
+
+    bool backupCreated = false;
+    try {
+      await _copyDatabaseWithSidecars(databasePath, backupPath);
+      backupCreated = true;
+
+      await _deleteDatabaseWithSidecars(databasePath);
+      await selectedDatabase.copy(databasePath);
+
+      for (final sidecarSuffix in _sqliteSidecarSuffixes) {
+        final sourceSidecar = File('$selectedDatabasePath$sidecarSuffix');
+        if (await sourceSidecar.exists()) {
+          await sourceSidecar.copy('$databasePath$sidecarSuffix');
+        }
+      }
+
+      await _validateDatabaseSchema(databasePath);
+    } catch (_) {
+      if (backupCreated) {
+        await _deleteDatabaseWithSidecars(databasePath);
+        await _copyDatabaseWithSidecars(backupPath, databasePath);
+      }
+      rethrow;
+    } finally {
+      await _reopenDatabaseConnection();
+    }
+  }
+
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'emotes_database.db');
+    String path = await getDatabaseFilePath();
     return await openDatabase(
       path,
       version: 1,
@@ -62,10 +213,10 @@ class DatabaseHelper {
   Emote mapToEmote(Map<String, dynamic> map) {
     return Emote(
         id: map['id'],
-        name: map['name'],
-        ownerUsername: map['owner_username'],
+        name: map['name'].toString(),
+        ownerUsername: map['owner_username'].toString(),
         hostUrl: map['host_url'],
-        stickerpack: map['stickerpack'],
+        stickerpack: map['stickerpack'].toString(),
         timeAtCash: map['time_at_cash']
         //image: map['image']
         );

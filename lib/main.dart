@@ -7,6 +7,7 @@ import 'package:emotes_to_stickers/stickerpackspage.dart';
 import 'package:emotes_to_stickers/util.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:emotes_to_stickers/preferences.dart';
 
 StreamController<bool> isLightTheme = StreamController();
@@ -14,6 +15,7 @@ String initialBrightness = "";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   initialBrightness = await readThemeBrightness();
 
   runApp(MyApp());
@@ -25,11 +27,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     bool initialValue =
-      (MediaQuery.platformBrightnessOf(context) == Brightness.light);
+        (MediaQuery.platformBrightnessOf(context) == Brightness.light);
 
-    if (initialBrightness == 'dark'){
+    if (initialBrightness == 'dark') {
       initialValue = false;
-    }else if (initialBrightness == 'light'){
+    } else if (initialBrightness == 'light') {
       initialValue = true;
     }
 
@@ -40,11 +42,12 @@ class MyApp extends StatelessWidget {
           if (kDebugMode) print("brightness? ${snapshot.requireData}");
 
           final ColorScheme colorScheme = ColorScheme.fromSeed(
-              brightness: (snapshot.requireData) ? Brightness.light : Brightness.dark,
+              brightness:
+                  (snapshot.requireData) ? Brightness.light : Brightness.dark,
               seedColor: Color(0xFF2B2D42),
-              primary: (snapshot.requireData) ?
-                  Color(0xFF5A8D3E) :
-                  Color(0xFF53DD6C),
+              primary: (snapshot.requireData)
+                  ? Color(0xFF5A8D3E)
+                  : Color(0xFF53DD6C),
               // Color(0xFF5AFF15)
               // Color(0xFF63EA15),
               contrastLevel: 0.8);
@@ -56,14 +59,13 @@ class MyApp extends StatelessWidget {
               colorScheme: colorScheme,
               elevatedButtonTheme: ElevatedButtonThemeData(
                 style: ElevatedButton.styleFrom(
-                  // side: BorderSide(
-                  //     color: colorScheme.secondary,
-                  //     width: 2), // Outline color and width
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  elevation: 5,
-                  shadowColor: Colors.black
-                ),
+                    // side: BorderSide(
+                    //     color: colorScheme.secondary,
+                    //     width: 2), // Outline color and width
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
+                    elevation: 5,
+                    shadowColor: Colors.black),
               ),
             ),
             home: const MyHomePage(),
@@ -87,7 +89,7 @@ class _MyHomePageState extends State<MyHomePage> {
   static final GlobalKey<StickerpackPageState> _stickerpackPageKey =
       GlobalKey<StickerpackPageState>();
   static final GlobalKey<FeaturedPageState> _featuredPageKey =
-    GlobalKey<FeaturedPageState>();
+      GlobalKey<FeaturedPageState>();
   static final GlobalKey<SettingsPageState> _settingsPageStateKey =
       GlobalKey<SettingsPageState>();
 
@@ -101,17 +103,21 @@ class _MyHomePageState extends State<MyHomePage> {
     // hier werden grade die unterschiedlichen Widgets aufgelistet
     _widgetOptions.addAll([
       StickerpackPage(
-          key: _stickerpackPageKey,
-          triggerSearchpageUpdate:
-              triggerSearchPageUpdate,
-          triggerFeaturedpageUpdate:
-              triggerFeaturedPageUpdate,
+        key: _stickerpackPageKey,
+        triggerSearchpageUpdate: triggerSearchPageUpdate,
+        triggerFeaturedpageUpdate: triggerFeaturedPageUpdate,
       ), //key: _stickerpackPageKey,
       SearchPage(
           key: _searchPageKey,
           triggerStickerpageUpdate: triggerStickerPageUpdate),
-      FeaturedPage(key: _featuredPageKey, triggerStickerpageUpdate: triggerStickerPageUpdate),
-      SettingsPage(key: _settingsPageStateKey, changeTheme: changeTheme,)
+      FeaturedPage(
+          key: _featuredPageKey,
+          triggerStickerpageUpdate: triggerStickerPageUpdate),
+      SettingsPage(
+        key: _settingsPageStateKey,
+        changeTheme: changeTheme,
+        onDatabaseImported: onDatabaseImported,
+      )
     ]);
   }
 
@@ -138,36 +144,39 @@ class _MyHomePageState extends State<MyHomePage> {
     _featuredPageKey.currentState?.updateCurrentPage();
   }
 
-  void changeTheme(bool isLight){
+  void onDatabaseImported() {
+    triggerStickerPageUpdate();
+    triggerSearchPageUpdate();
+    triggerFeaturedPageUpdate();
+  }
+
+  void changeTheme(bool isLight) {
     isLightTheme.add(isLight);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:
-      PreferredSize(
+      appBar: PreferredSize(
         preferredSize: const Size.fromHeight(70.0),
         child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(context).colorScheme.surface.withAlpha(150),
-                spreadRadius: 4,
-                blurRadius: 5,
-                offset: Offset(0, 3),
-              )
-            ]
-          ),
-          alignment: Alignment.bottomLeft,
-          child:
-            SafeArea(child: Padding(
-              padding: EdgeInsets.all(15),
-              child: MyAppBarTitle(),
-            ),
-          )
-        ),
+            decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.surface.withAlpha(150),
+                    spreadRadius: 4,
+                    blurRadius: 5,
+                    offset: Offset(0, 3),
+                  )
+                ]),
+            alignment: Alignment.bottomLeft,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.all(15),
+                child: MyAppBarTitle(),
+              ),
+            )),
       ),
       body: Center(
         child: IndexedStack(

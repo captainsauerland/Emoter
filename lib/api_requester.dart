@@ -3,6 +3,7 @@ import 'package:emotes_to_stickers/emote.dart';
 import 'package:emotes_to_stickers/database.dart';
 import 'package:emotes_to_stickers/http_singleton.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:emotes_to_stickers/emoteset.dart';
 
 Future<List<Emote>> createEmoteObjects(Map<String, dynamic> response) async {
   if (response.containsKey('errors')) {
@@ -133,6 +134,111 @@ Future<Emote?> requestById(String id) async{
   return await createOneEmoteObject(data!);
 }
 
+// Updated fetchEmoteSetIds method
+Future<List<EmoteSet>> fetchEmoteSets(String username) async {
+  final GraphQLClient client = GraphQLClient(
+    link: HttpLink("https://7tv.io/v3/gql"),
+    cache: GraphQLCache(),
+  );
+
+  const String fetchEmoteSetsByUsernameQuery = """
+    query FetchEmoteSetsByUsername(\$username: String!) {
+      users(query: \$username, limit: 1) {
+        id
+        username
+        emote_sets {
+          id
+          name
+          emote_count
+        }
+      }
+    }
+    """;
+
+  final QueryOptions options = QueryOptions(
+    document: gql(fetchEmoteSetsByUsernameQuery),
+    variables: {'username': username},
+  );
+
+  final QueryResult result = await client.query(options);
+
+  if (result.hasException) {
+    throw Exception(result.exception.toString());
+  }
+
+  final usernameNew = result.data?['users'][0]['username'];
+  final emoteSets = result.data?['users'][0]['emote_sets'] ?? [];
+
+  // Convert the result into a list of EmoteSet objects
+  return emoteSets.map<EmoteSet>((emoteSet) {
+    return EmoteSet(
+      id: emoteSet['id'] as String,
+      name: emoteSet['name'] as String,
+      emoteCount: emoteSet['emote_count'] as int,
+      owner: usernameNew as String
+    );
+  }).toList();
+}
+
+//Returns a non-loaded list of emotes
+Future<List<Emote>> fetchEmotesFromSet(String emoteSetId) async {
+  final GraphQLClient client = GraphQLClient(
+    link: HttpLink("https://7tv.io/v3/gql"),
+    cache: GraphQLCache(),
+  );
+
+  const String getEmotesQuery = '''
+  query GetEmotes(\$id: ObjectID!) {
+    emoteSet(id: \$id) {
+      emotes {
+        id
+        name
+        actor {
+          username
+        }
+        data {
+          host {
+            url
+          }
+        }
+      }
+    }
+  }
+  ''';
+
+  final QueryOptions options = QueryOptions(
+    document: gql(getEmotesQuery),
+    variables: {
+      'id': emoteSetId,
+    },
+  );
+
+  final QueryResult result = await client.query(options);
+
+  if (result.hasException) {
+    throw Exception(result.exception.toString());
+  }
+
+  final List<dynamic> emotesData = result.data?['emoteSet']['emotes'] ?? [];
+
+  var emotesList = emotesData.map((emote) {
+    return Emote(
+      id: emote['id'],
+      name: emote['name'],
+      ownerUsername: emote['actor']?['username'],
+      hostUrl: emote['data']?['host']['url'],
+    );
+  }).toList();
+
+  //List<Emote> loadedEmotesList = [];
+  // for (var emote in emotesList){
+  //   loadedEmotesList.add(await DatabaseHelper().saveOrGetEmote(emote));
+  //   //print("added emote ${emote.name}");
+  // }
+
+  return emotesList;
+}
+
 //not ideal, doesnt use flutter_graphql
 class SevenTv {
   final String endpoint = "https://7tv.io/v3/gql";
@@ -197,4 +303,5 @@ class SevenTv {
 
     return createEmoteObjects(jsonResponse);
   }
+
 }

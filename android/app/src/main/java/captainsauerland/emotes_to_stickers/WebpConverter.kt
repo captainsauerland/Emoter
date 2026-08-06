@@ -22,7 +22,7 @@ import java.io.IOException
 class WebpConverter : AppCompatActivity() {
 
     companion object {
-        final var TAG = "meine app"
+        private const val TAG = "EmoterWebp"
 
         fun convertWebP(filename: String, applicationContext: Context): String {
             val tempFolder = "file://" + applicationContext.cacheDir.path + "/"
@@ -34,9 +34,11 @@ class WebpConverter : AppCompatActivity() {
 
                 var size = Long.MAX_VALUE
                 var path = ""
-                var qualityDowngrade = 0
+                var qualityDowngrade = 0f
                 var framesPercent = 1F
                 var quality = 90f
+                val maxAttempts = 12
+                var attempt = 0
 
                 val webPDecoder = WebPDecoder(applicationContext)
 
@@ -56,8 +58,9 @@ class WebpConverter : AppCompatActivity() {
                     framesPercent = settings.second
                 }
 
-                while (true){
-                    quality -= qualityDowngrade
+                while (attempt < maxAttempts){
+                    attempt++
+                    quality = (quality - qualityDowngrade).coerceAtLeast(0f)
 
                     webPDecoder.reset()
 
@@ -70,28 +73,29 @@ class WebpConverter : AppCompatActivity() {
                     //println("Convert to webp took $duration milliseconds") //DEBUG
 
                     size = getFileSizeInBytes(path)
+                    val hasAttemptsLeft = attempt < maxAttempts
 
-                    if (size <= 500_000){
+                    if (size <= 500_000 || !hasAttemptsLeft || (quality <= 0f && framesPercent <= 0.1f)){
                         break;
                     }else{
-                        val sizeDiff = size / 500_000
-                        var qualtiyDowngradeDiff:Int
-                        var framesPercentDiff:Float
+                        val sizeDiff = size / 500_000f
+                        val qualityDowngradeDiff:Float
+                        val framesPercentDiff:Float
                         if (sizeDiff > 2){
-                            qualtiyDowngradeDiff = 20
+                            qualityDowngradeDiff = 20f
                             framesPercentDiff = 0.3F
                         } else if (sizeDiff > 1.5F){
-                            qualtiyDowngradeDiff = 10
+                            qualityDowngradeDiff = 10f
                             framesPercentDiff = 0.2F
                         } else { //sizeDiff > 1.25F
-                            qualtiyDowngradeDiff = 5
+                            qualityDowngradeDiff = 5f
                             framesPercentDiff = 0.2F
                         }
 //                        else{
-//                            qualtiyDowngradeDiff = 3
+//                            qualityDowngradeDiff = 3f
 //                            framesPercentDiff = 0.05F
 //                        }
-                        qualityDowngrade = 25.coerceAtMost(qualityDowngrade + qualtiyDowngradeDiff)
+                        qualityDowngrade = 25f.coerceAtMost(qualityDowngrade + qualityDowngradeDiff)
                         framesPercent = 0.1F.coerceAtLeast(framesPercent - framesPercentDiff)
 
                         deleteFile(path)
@@ -152,7 +156,7 @@ class WebpConverter : AppCompatActivity() {
 
             val samples = mutableListOf<Int>()
             var current = 0
-            while (current <= frameCount) {
+            while (current < frameCount) {
                 samples.add(current)
                 current += d
             }
@@ -189,7 +193,7 @@ class WebpConverter : AppCompatActivity() {
             if (bitmap != null) {
                 val resized = resizeBitmapTo512x512(bitmap)
 
-                val outputUri = Uri.parse("file://" +applicationContext.cacheDir.path + "/${System.currentTimeMillis()}.webp")
+                val outputUri = Uri.parse("file://" +applicationContext.cacheDir.path + "/${System.nanoTime()}.webp")
 
                 webPEncoder.encode(resized, outputUri)
 
@@ -325,8 +329,9 @@ class WebpConverter : AppCompatActivity() {
         }
 
         private fun alterBitmapSlightly(bitmap: Bitmap): Bitmap {
-            val alteredBitmap = bitmap.copy(bitmap.config, true)
-            val pixel = alteredBitmap.getPixel(bitmap.width/2, bitmap.height/2)
+            val config = bitmap.config ?: Bitmap.Config.ARGB_8888 // Default to ARGB_8888 if null
+            val alteredBitmap = bitmap.copy(config, true)
+            val pixel = alteredBitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
             val alteredPixel = pixel xor 0x10000011
             alteredBitmap.setPixel(0, 0, alteredPixel)
 

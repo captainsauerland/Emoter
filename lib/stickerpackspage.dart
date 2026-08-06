@@ -2,7 +2,6 @@ import 'package:emotes_to_stickers/errorwindow.dart';
 import 'package:emotes_to_stickers/loadingwindow.dart';
 import 'package:emotes_to_stickers/send_to_wa.dart';
 import 'package:emotes_to_stickers/util.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:emotes_to_stickers/stickerpack.dart';
 import 'package:emotes_to_stickers/stickerpackviewer.dart';
@@ -15,11 +14,10 @@ class StickerpackPage extends StatefulWidget {
   final VoidCallback triggerSearchpageUpdate;
   final VoidCallback triggerFeaturedpageUpdate;
 
-  StickerpackPage(
-      {Key? key,
+  const StickerpackPage(
+      {super.key,
       required this.triggerSearchpageUpdate,
-      required this.triggerFeaturedpageUpdate})
-      : super(key: key);
+      required this.triggerFeaturedpageUpdate});
 
   @override
   StickerpackPageState createState() => StickerpackPageState();
@@ -78,6 +76,8 @@ class StickerpackPageState extends State<StickerpackPage> {
 
       currentStickerpack = stickerPacks[trueIndex]; //currentStickerpack is old
     } else {
+      packsSelectionNotifier.setList([]);
+      currentStickerpack = null;
       setState(() {
         stickerPacks = stickerPacksNew;
       });
@@ -85,6 +85,9 @@ class StickerpackPageState extends State<StickerpackPage> {
   }
 
   addStickerpack(String name, BuildContext context) async {
+    if (name.isEmpty) {
+      return; //no error message, user has to identify the problem himself
+    }
     if (await DatabaseHelper().doesPackExist(name)) {
       (context.mounted)
           ? showDialog(
@@ -132,13 +135,15 @@ class StickerpackPageState extends State<StickerpackPage> {
   }
 
   onProgess(double newProgress) {
-    if (newProgress == 1) {
-      loadingDialogKey.currentState?.closeDialog();
-    }
     loadingDialogKey.currentState?.setValue(newProgress);
   }
 
   onAddToWhatsAppDone(String returnValue) async {
+    loadingDialogKey.currentState?.closeDialog();
+    if (!mounted) {
+      return;
+    }
+
     if (returnValue.isNotEmpty) {
       showDialog(
           context: context,
@@ -164,7 +169,7 @@ class StickerpackPageState extends State<StickerpackPage> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Create new Stickerpack'),
-          content: TextField(
+          content: TextFormField(
             maxLength: 64,
             maxLengthEnforcement: MaxLengthEnforcement.enforced,
             controller: _textFieldController,

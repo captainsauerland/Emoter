@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 
 import 'package:emotes_to_stickers/database.dart';
 import 'package:emotes_to_stickers/emote.dart';
@@ -7,6 +6,9 @@ import 'package:emotes_to_stickers/stickerpackspage.dart';
 import 'package:emotes_to_stickers/util.dart';
 import 'package:flutter/material.dart';
 import 'package:emotes_to_stickers/api_requester.dart';
+import 'package:flutter/services.dart';
+
+import 'emoteset.dart';
 
 class SearchPage extends StatefulWidget {
   final VoidCallback triggerStickerpageUpdate;
@@ -25,6 +27,10 @@ class SearchPageState extends State<SearchPage> {
   bool showBackground = true;
   int pages = 1;
   String currentTerm = "";
+  final TextEditingController _textFieldController = TextEditingController();
+  EmoteSet? filterSet;
+
+
 
   updateSearchPage(){
     numberOfEmotesSelected.value++;
@@ -50,8 +56,21 @@ class SearchPageState extends State<SearchPage> {
     setState(() {
       showBackground = false;
     });
-    var seventv = SevenTv();
 
+    if (filterSet != null){
+      var emotes = await filterSet!.getEmotesOnPage(pages, search);
+      setState(() {
+        emoteKeys = List.generate(emotes.length,
+                (_) => GlobalKey<ClickableEmoteTileState>()); //neue keys
+        _emotes = emotes;
+        if (_emotes.isEmpty){
+          _emotes.add(Emote(id: "", name: "")); //empty emote to signal, that the search is done
+        }
+      });
+      return;
+    }
+
+    var seventv = SevenTv();
     try {
       var emotes = await seventv.emoteSearch(
         searchTerm: search,
@@ -94,6 +113,16 @@ class SearchPageState extends State<SearchPage> {
     var seventv = SevenTv();
 
     pages++;
+
+    if (filterSet != null){
+      var emotes = await filterSet!.getEmotesOnPage(pages, currentTerm);
+      setState(() {
+        emoteKeys.addAll(List.generate(emotes.length,
+                (_) => GlobalKey<ClickableEmoteTileState>())); //neue keys
+        _emotes.addAll(emotes);
+      });
+      return;
+    }
 
     try {
       var emotes = await seventv.emoteSearch(
@@ -145,6 +174,169 @@ class SearchPageState extends State<SearchPage> {
     numberOfEmotesSelected.value--;
   }
 
+  Future<void> showEmoteSetDialog(
+      BuildContext context, Future<List<EmoteSet>> futureEmoteSets) async {
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return FutureBuilder<List<EmoteSet>>(
+          future: futureEmoteSets,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return AlertDialog(
+                title: Text("Select an Emote Set"),
+                content: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: 100.0, // Set the maximum height for the dialog content
+                  ),
+                  child: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              );
+            } else if (snapshot.hasError) {
+              return AlertDialog(
+                title: Text("Select an Emote Set"),
+                content: Center(
+                  child: Text("Failed to load emote sets: ${snapshot.error}"),
+                ),
+              );
+            } else if (snapshot.hasData) {
+              final emoteSets = snapshot.data!;
+              if (emoteSets.isEmpty){
+                return AlertDialog(
+                  title: Text("No emote sets found"),
+                  actions: [
+                    TextButton(onPressed: Navigator.of(context).pop, child: Text("ok"))
+                  ],
+                );
+              }
+              return AlertDialog(
+                title: Text("Select from ${emoteSets.first.owner}'s sets:"),
+                content:
+                SizedBox(
+                  width: double.maxFinite,
+                  child:
+                  ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: emoteSets.length,
+                    itemBuilder: (context, index) {
+                      final emoteSet = emoteSets[index];
+                      return Card( // Add a Card for better visual separation
+                        elevation: 4.0, // Shadow effect for better visibility
+                        child: ListTile(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+                          title: Text(
+                            emoteSet.name,
+                            style: TextStyle(fontWeight: FontWeight.bold), // Make the title stand out
+                          ),
+                          subtitle: Text("Emotes: ${emoteSet.emoteCount}"),
+                          trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey), // Add a trailing icon
+                          onTap: () {
+                            // Handle emote set selection
+                            setState(() {
+                              filterSet = emoteSet;
+                            });
+                            _searchSubmitted(currentTerm, context);
+                            Navigator.of(context).pop(); // Pass the selected emoteSet back
+                          },
+                        ),
+                      );
+
+                    },
+                  ),
+                ),
+              );
+            } else {
+              return AlertDialog(
+                title: Text("Select an Emote Set"),
+                content: Center(
+                  child: Text("No emote sets available."),
+                ),
+              );
+            }
+          },
+        );
+      },
+    );
+  }
+
+
+  Future<void> searchForEmoteSets(String username, BuildContext context) async {
+    var emoteSets = fetchEmoteSets(_textFieldController.text);
+    showEmoteSetDialog(context, emoteSets);
+  }
+
+  Future<void> _userSearchDialogBuilder(BuildContext parentContext) {
+    return showDialog<void>(
+      context: parentContext,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Filter by emote set'),
+          content:
+          IntrinsicHeight(
+            child: Column(
+              children: [
+                Text("Enter a username. In the next step you can select one of the users emote sets."),
+                TextFormField(
+                  maxLength: 64,
+                  maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                  controller: _textFieldController,
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.allow(
+                        RegExp("^[a-zA-Z0-9_\\-\\. ]+\$"))
+                  ],
+                  decoration: InputDecoration(hintText: "Name"),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              style: TextButton.styleFrom(
+                textStyle: Theme.of(context).textTheme.labelLarge,
+              ),
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            (filterSet != null) ?
+            TextButton(
+              style: TextButton.styleFrom(
+                textStyle: Theme.of(context).textTheme.labelLarge,
+              ),
+              child: const Text('Remove filter'),
+              onPressed: () {
+                setState(() {
+                  filterSet = null;
+                  filterSet = null;
+                  _emotes = [];
+                  showBackground = true;
+                });
+                numberOfEmotesSelected.value = 0;
+                Navigator.pop(context);
+              },
+            ) : Text(''),
+            TextButton(
+              style: TextButton.styleFrom(
+                textStyle: Theme.of(context).textTheme.labelLarge,
+              ),
+              child: const Text('Go'),
+              onPressed: () {
+                if (_textFieldController.text.isEmpty){
+                  return;
+                }
+                Navigator.pop(context);
+                searchForEmoteSets(_textFieldController.text, parentContext);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,20 +366,47 @@ class SearchPageState extends State<SearchPage> {
                   SliverAppBar(
                       clipBehavior: Clip.none,
                       shape: const StadiumBorder(),
-                      scrolledUnderElevation: 0.0,
+                      scrolledUnderElevation: 0,
                       titleSpacing: 0.0,
                       backgroundColor: Colors.transparent,
                       floating: true,
-                      title:
-                      Column(
+                      pinned: true,
+                      toolbarHeight: 150,
+                      title: Column(
                           children: [
-                            Container(height: 25),
                             Padding(
-                                padding: EdgeInsets.all(25),
-                                child: SearchBar(
-                                    hintText: 'Search 7tv',
-                                    leading: const Icon(Icons.search),
-                                    onSubmitted: (String search) => _searchSubmitted(search, context)))
+                                padding: EdgeInsets.symmetric(vertical: 5, horizontal: 25),
+                                child:
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ElevatedButton(
+                                        onPressed: () => _userSearchDialogBuilder(context),
+                                        child:
+                                            IntrinsicWidth(
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.person),
+                                                  (filterSet == null) ? Text('') :
+
+                                                  Flexible(child:
+                                                  Text( "${filterSet!.owner}: ${filterSet!.name}",
+                                                      overflow: TextOverflow.ellipsis)
+                                                  )
+                                                ],
+                                              ),
+                                            )
+                                    ),
+                                    Container(height: 10),
+                                    SearchBar(
+                                        hintText: 'Search 7tv',
+                                        leading: const Icon(Icons.search),
+                                        onSubmitted: (String search) => _searchSubmitted(search, context)
+                                    ),
+                                  ],
+                                )
+
+                            ),
                           ]
                       )
                   ),
@@ -260,7 +479,7 @@ class SearchPageState extends State<SearchPage> {
                     if (value > 0) {
                       if (StickerpackPageState.currentStickerpack == null){
                         return ElevatedButton(
-                            onPressed: () => (),
+                            onPressed:() => (),
                             child: Text("please add a stickerpack to add emotes"));
                       }else{
                         return
@@ -269,7 +488,7 @@ class SearchPageState extends State<SearchPage> {
                               child: ElevatedButton(
                                   onPressed: addToPack,
                                   child: Text(
-                                      'Add to $value stickers current pack "${StickerpackPageState.currentStickerpack!.name}"'))
+                                      'Add $value stickers to current pack "${StickerpackPageState.currentStickerpack!.name}"'))
                           );
                       }
                     } else {

@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:emotes_to_stickers/database.dart';
 import 'package:emotes_to_stickers/preferences.dart';
 import 'package:emotes_to_stickers/util.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,8 +12,10 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 class SettingsPage extends StatefulWidget {
   final Function(bool) changeTheme;
+  final VoidCallback? onDatabaseImported;
 
-  const SettingsPage({super.key, required this.changeTheme});
+  const SettingsPage(
+      {super.key, required this.changeTheme, this.onDatabaseImported});
 
   @override
   SettingsPageState createState() => SettingsPageState();
@@ -35,10 +39,223 @@ class SettingsPageState extends State<SettingsPage> {
 
   Future<void> onCleanCache(BuildContext context) async {
     await cleanCache();
+    if (!context.mounted) {
+      return;
+    }
     setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
         content: Text("Successfully deleted unused cache")));
+  }
+
+  Future<void> _showLoadingDialog(BuildContext context, String message,
+      Future<void> Function() task) async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Please wait'),
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(width: 16),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        );
+      },
+    );
+
+    try {
+      await task();
+    } finally {
+      if (navigator.mounted && navigator.canPop()) {
+        navigator.pop();
+      }
+    }
+  }
+
+  Future<bool> _showImportConfirmationDialog(BuildContext context) async {
+    final shouldImport = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Override local database?'),
+          content: const Text(
+              'Importing will replace your current local stickerpack/emote database.\n\n'
+              'Only continue if you trust the selected file and have an external backup.'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+            ),
+            FilledButton(
+              child: const Text('Import and override'),
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    return shouldImport ?? false;
+  }
+
+  Future<void> _exportDatabase(BuildContext context) async {
+    try {
+      String? exportedPath;
+
+      await _showLoadingDialog(context, 'Exporting local database...', () async {
+        final databaseBytes = await DatabaseHelper().exportDatabaseBytes();
+        final timestamp = DateTime.now()
+            .toIso8601String()
+            .replaceAll(':', '-')
+            .replaceAll('.', '-');
+        final fileName = 'emotes_database_$timestamp.db';
+
+        exportedPath = await FilePicker.platform.saveFile(
+          dialogTitle: 'Export Emoter database',
+          fileName: fileName,
+          type: FileType.custom,
+          allowedExtensions: ['db'],
+          bytes: databaseBytes,
+        );
+
+        // On desktop, file_picker only chooses the destination. Mobile
+        // implementations write the supplied bytes themselves.
+        if (exportedPath != null && !Platform.isAndroid && !Platform.isIOS) {
+          await File(exportedPath!).writeAsBytes(databaseBytes, flush: true);
+        }
+      });
+
+      if (!context.mounted || exportedPath == null) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Database export saved to: $exportedPath')));
+    } catch (e) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Database export failed: $e')));
+    }
+  }
+
+  Future<void> _importDatabase(BuildContext context) async {
+    try {
+      final pickedFile = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        dialogTitle: 'Select an exported Emoter database file',
+      );
+
+      if (!context.mounted || pickedFile == null) {
+        return;
+      }
+
+      final selectedPath = pickedFile.files.single.path;
+      if (selectedPath == null || selectedPath.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('Could not read selected file path.')));
+        return;
+      }
+
+      final shouldImport = await _showImportConfirmationDialog(context);
+      if (!context.mounted || !shouldImport) {
+        return;
+      }
+
+      await _showLoadingDialog(context, 'Importing database...', () async {
+        await DatabaseHelper().importDatabaseFromFile(selectedPath);
+      });
+
+      widget.onDatabaseImported?.call();
+
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Database import completed successfully.')));
+    } catch (e) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Database import failed: $e')));
+    }
+  }
+
+  Future<void> _showDatabaseImportExportDialog(BuildContext parentContext) {
+    return showDialog<void>(
+      context: parentContext,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Import/export database file'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                    'Export creates a backup file of all your local stickerpack/emote database data.'),
+                const SizedBox(height: 10),
+                const Text(
+                    'Import replaces your current local database data with the selected file.'),
+                const SizedBox(height: 10),
+                const Text('Wrong or corrupt files can fail during import.'),
+                const SizedBox(height: 10),
+                const Text(
+                    'Keep an external backup before importing so you can recover if needed.'),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.arrow_upward),
+                    label: const Text('Export database'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _exportDatabase(parentContext);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.arrow_downward),
+                    label: const Text('Import database'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _importDatabase(parentContext);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   onReallyCleanCache(BuildContext context) async {
@@ -144,12 +361,17 @@ class SettingsPageState extends State<SettingsPage> {
                   onLongPressed: () => _deleteAllCacheDialogBuilder(context),
                   onPressed: () => onCleanCache(context)),
               CustomButton(
+                  title: "Import/export database file",
+                  subtitle: Text(
+                      "Backup your local DB or replace it from an external file"),
+                  icon: Icons.import_export,
+                  onPressed: () => _showDatabaseImportExportDialog(context)),
+              CustomButton(
                   title: "Join the Emoter Discord!",
                   subtitle: Text("please?"),
                   icon: Icons.discord,
-                  onPressed: () => launchUrlString(
-                      "https://discord.gg/6Wp347G6Na")
-              ),
+                  onPressed: () =>
+                      launchUrlString("https://discord.gg/6Wp347G6Na")),
               CustomButton(
                 title: "Credits",
                 subtitle: Text("<3"),
@@ -162,6 +384,7 @@ class SettingsPageState extends State<SettingsPage> {
                           content: IntrinsicHeight(
                             child: Column(
                               children: [
+                                Text("Thank you for over 1k downloads!\n"),
                                 Text(
                                     textAlign: TextAlign.center,
                                     "Without these libraries, this project wouldn't have been possible:"),
@@ -194,7 +417,8 @@ class SettingsPageState extends State<SettingsPage> {
               ),
               CustomButton(
                   title: "Reset stickerpacks.json",
-                  subtitle: Text("iykyk"),
+                  subtitle: Text(
+                      "use this if exporting packs gives weird error messages"),
                   icon: Icons.bug_report,
                   onPressed: deleteStickerpacksJSON),
               Container(
@@ -236,7 +460,8 @@ class CustomButton extends StatelessWidget {
   final VoidCallback? onLongPressed;
 
   const CustomButton(
-      {super.key, required this.title,
+      {super.key,
+      required this.title,
       required this.subtitle,
       required this.icon,
       required this.onPressed,

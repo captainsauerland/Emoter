@@ -1,23 +1,27 @@
-import 'dart:isolate';
 import 'package:emotes_to_stickers/dart_kotlin.dart';
 import 'package:emotes_to_stickers/util.dart';
-import 'package:flutter/services.dart';
 import 'package:whatsapp_stickers_exporter/exceptions.dart';
 import 'package:emotes_to_stickers/emote.dart';
 import 'package:emotes_to_stickers/stickerpack.dart';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as pth;
 import 'package:whatsapp_stickers_exporter/whatsapp_stickers_exporter.dart';
 
 Future<String> sendStickerPackToWhatsApp(Stickerpack stickerpack,
     Function(double) progressNotfier, Function(String) onDone) async {
-  List<String> paths =
-      await convertAllStickersOfPack(stickerpack, progressNotfier);
-  String trayPath = await convertTrayImage(stickerpack);
-  String returnValue = await sendToWhatsApp(paths, stickerpack.name, trayPath);
-  onDone(returnValue);
-  return returnValue;
+  try {
+    List<String> paths =
+        await convertAllStickersOfPack(stickerpack, progressNotfier);
+    String trayPath = await convertTrayImage(stickerpack);
+    String returnValue =
+        await sendToWhatsApp(paths, stickerpack.name, trayPath);
+    onDone(returnValue);
+    return returnValue;
+  } catch (e) {
+    final error = e.toString().replaceFirst('Exception: ', '');
+    onDone(error);
+    return error;
+  }
 }
 
 Future<List<String>> convertAllStickersOfPack(
@@ -30,65 +34,34 @@ Future<List<String>> convertAllStickersOfPack(
     fileNames.add(fileName);
   }
 
-  List<String> resultNames = await batchConvert(fileNames, progressNotifier);
-  List<String> resultPaths = [];
-  Directory dir = await getApplicationCacheDirectory();
-  for (String name in resultNames) {
-    resultPaths.add("${dir.path}/$name");
-  }
-
-  return resultNames;
-}
-
-void convertWebP(Map<String, dynamic> params) async {
-  final sendPort = params['sendPort'] as SendPort;
-  final input = params['input'] as String;
-  final rootIsolateToken = params['rootIsolateToken'] as RootIsolateToken;
-
-  BackgroundIsolateBinaryMessenger.ensureInitialized(rootIsolateToken);
-
-  final result = await NativeCode().callConvertToWebP(input);
-  sendPort.send(result);
-}
-
-Future<String> runIsolateConverter(String path, VoidCallback finished) async {
-  final receivePort = ReceivePort();
-  final rootIsolateToken = ServicesBinding.rootIsolateToken!;
-
-  await Isolate.spawn(convertWebP, {
-    'sendPort': receivePort.sendPort,
-    'input': path,
-    'rootIsolateToken': rootIsolateToken
-  });
-  String result = await receivePort.first;
-  finished();
-  return result;
+  return batchConvert(fileNames, progressNotifier);
 }
 
 Future<List<String>> batchConvert(
     List<String> fileNames, Function(double) progressNotfier) async {
-  List<Future<String>> results = [];
-
-  int completed = 0;
-
-  finished() {
-    completed++;
-    progressNotfier.call(completed / fileNames.length);
+  if (fileNames.isEmpty) {
+    progressNotfier.call(1.0);
+    return [];
   }
 
-  for (String fileName in fileNames) {
+  List<String> convertedPaths = [];
+
+  for (int i = 0; i < fileNames.length; i++) {
+    final fileName = fileNames[i];
+
     String? convertedPath = await getWebpPathFromCache("${fileName}_c");
-    if (convertedPath != null) {
-      finished();
-      results.add(Future.value(convertedPath));
-    } else {
-      results.add(runIsolateConverter(fileName, finished));
+    convertedPath ??= await NativeCode().callConvertToWebP(fileName);
+
+    final exists = await File(convertedPath).exists();
+    if (!exists) {
+      throw Exception("Failed to convert $fileName to webp");
     }
+
+    convertedPaths.add(convertedPath);
+    progressNotfier.call((i + 1) / fileNames.length);
   }
 
-  Future<List<String>> finishedResults = Future.wait(results);
-
-  return finishedResults;
+  return convertedPaths;
 }
 
 Future<String> convertTrayImage(Stickerpack stickerpack) async {
